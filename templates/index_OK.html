@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Serienmail-Assistent</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .step-header { background-color: #0d6efd; color: white; padding: 0.75rem 1.25rem; border-top-left-radius: 0.3rem; border-top-right-radius: 0.3rem;}
+        .card { margin-bottom: 1.5rem; }
+        .disabled-card { opacity: 0.6; pointer-events: none; }
+        .container { max-width: 960px; }
+        .process-log { max-height: 300px; overflow-y: auto; font-size: 0.875rem; }
+
+        /* STYLES FÜR SCHRITT-INDIKATOR */
+        .steps-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding: 1rem 0;
+            background-color: #e9ecef;
+            border-radius: 0.5rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075);
+        }
+        .step-item {
+            flex: 1;
+            text-align: center;
+            padding: 0.75rem 0.5rem;
+            font-weight: bold;
+            color: #6c757d;
+            position: relative;
+        }
+        .step-item.active {
+            color: #0d6efd;
+        }
+        .step-item.completed {
+            color: #28a745;
+        }
+        .step-item .step-circle {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            border-radius: 50%;
+            background-color: #adb5bd;
+            color: white;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .step-item.active .step-circle {
+            background-color: #0d6efd;
+            transform: scale(1.1);
+        }
+        .step-item.completed .step-circle {
+            background-color: #28a745;
+        }
+        .step-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background-color: #adb5bd;
+            top: 50%;
+            left: 50%;
+            transform: translateY(-50%);
+            z-index: -1;
+        }
+        .step-item.completed:not(:last-child)::after {
+            background-color: #28a745;
+        }
+
+        /* Zusätzliche Anpassung, um die Überschriften der Schritte klarer zu machen */
+        .card .step-title {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        /* STYLES FÜR HIGHLIGHT */
+        .highlight-next-input {
+            border: 2px solid #0d6efd !important;
+            box-shadow: 0 0 8px rgba(13, 110, 253, 0.5);
+            transition: all 0.3s ease-in-out;
+        }
+        .highlight-next-container {
+            border: 2px dashed #0d6efd;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+<div class="container my-5">
+    <div class="float-end">
+        <a href="/settings" class="btn btn-info btn-sm">Einstellungen</a>
+        <a href="/logout" class="btn btn-danger btn-sm">Logout</a>
+    </div>
+    <h2 class="mb-4">Willkommen, {{ username }}!</h2>
+    <h2 class="mb-4">Serienmail-Assistent</h2>
+
+    {% if fatalError %}
+        <div class="alert alert-danger"><strong>Systemfehler:</strong> {{ fatalError }}</div>
+    {% endif %}
+
+    {% if processLog %}
+    <div class="card shadow-sm">
+        <h5 class="card-header bg-secondary text-white">Protokoll</h5>
+        <div class="card-body process-log">
+            {% for log in processLog %}
+                <div class="alert {{ 'alert-success' if log.status == 'success' else 'alert-danger' }} p-2 mb-2">{{ log.message }}</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# SCHRITT-INDIKATOR #}
+    <div class="steps-indicator">
+        <div class="step-item {% if currentStep == 'upload_excel' %}active{% elif excelFilePath %}completed{% endif %}">
+            <div class="step-circle">1</div>
+            <div>Datenquelle hochladen</div>
+        </div>
+        <div class="step-item {% if currentStep == 'main_form' and (not isFiltered or not isReadyForStep3) %}active{% elif isReadyForStep3 or currentStep == 'review' %}completed{% endif %}">
+            <div class="step-circle">2</div>
+            <div>Empfänger & Vorlage</div>
+        </div>
+        <div class="step-item {% if currentStep == 'main_form' and isReadyForStep3 %}active{% elif currentStep == 'review' %}completed{% endif %}">
+            <div class="step-circle">3</div>
+            <div>PDFs erzeugen</div>
+        </div>
+        <div class="step-item {% if currentStep == 'review' %}active{% endif %}">
+            <div class="step-circle">4</div>
+            <div>Vorschau & Versand</div>
+        </div>
+    </div>
+    {# ENDE SCHRITT-INDIKATOR #}
+
+    {% if currentStep == 'review' %}
+        <form id="review-form" action="/" method="post">
+            <div class="card shadow-sm">
+                <h5 class="step-header">Schritt 4: Vorschau und Versand-Freigabe</h5>
+                <div class="card-body">
+                    {% if reviewFiles %}
+                        <p>Hier sehen Sie alle erstellten Dokumente. Entfernen Sie die Haken bei den E-Mails, die nicht versendet werden sollen.</p>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead><tr><th>Senden?</th><th>Empfänger</th><th>E-Mail-Adresse</th><th>Dokument (Vorschau)</th></tr></thead>
+                                <tbody>
+                                    {% for fileInfo in reviewFiles %}
+                                    <tr>
+                                        <td class="text-center align-middle"><input class="form-check-input" type="checkbox" name="selected_files[]" value="{{ fileInfo.pdf_path }}" checked></td>
+                                        <td>{{ fileInfo.recipient_name }}</td>
+                                        <td>{{ fileInfo.recipient_email }}</td>
+                                        <td><a href="{{ fileInfo.pdf_web_path }}" target="_blank">{{ fileInfo.pdf_path.split('/')[-1] }}</a></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">Es wurden keine Dokumente zur Vorschau generiert. Bitte gehen Sie zurück zu Schritt 3.</div>
+                    {% endif %}
+                </div>
+                <div class="card-footer text-end">
+                    <button type="submit" name="action" value="download_zip" class="btn btn-secondary" {% if not reviewFiles %}disabled{% endif %}>Alle als ZIP laden</button>
+                    <button type="submit" name="action" value="send_selected" class="btn btn-success" {% if not reviewFiles %}disabled{% endif %}>Ausgewählte E-Mails jetzt senden</button>
+                </div>
+            </div>
+        </form>
+    {% elif currentStep == 'upload_excel' %}
+        <div class="card shadow-sm">
+            <h5 class="step-header">Schritt 1: Datenquelle hochladen</h5>
+            <div class="card-body">
+                <p>Wählen Sie Ihre Excel-Tabelle aus, die alle Empfängerdaten enthält.</p>
+                <form action="/" method="post" enctype="multipart/form-data">
+                    <div class="mb-3" id="excel_file_upload_container">
+                        <label for="excel_file_upload" class="form-label fw-bold">Bitte wählen Sie Ihre Excel-Datentabelle (.xlsx, .xls)</label>
+                        <input class="form-control" type="file" name="excel_file" id="excel_file_upload" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
+                    </div>
+                    <div class="text-end">
+                        <button type="submit" name="action" value="upload_excel" class="btn btn-primary">Tabelle hochladen und verarbeiten</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    {% elif currentStep == 'main_form' %}
+        <div class="alert alert-info d-flex justify-content-between align-items-center">
+            Aktive Datentabelle: <strong>{{ originalExcelFilename }}</strong>
+            <a href="/reset_process" class="btn btn-warning btn-sm">Neue Tabelle verwenden</a>
+        </div>
+        <form action="/" method="post" enctype="multipart/form-data">
+            <div class="card shadow-sm">
+                <h5 class="step-header">Schritt 2: Empfänger auswählen und filtern</h5>
+                <div class="card-body">
+                    <p>Definieren Sie hier den Filter, um nur bestimmte Zeilen aus Ihrer Excel-Tabelle für den Serienmail-Versand zu nutzen.</p>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label for="column_select" class="form-label fw-bold">Filter-Spalte</label>
+                            <select name="column" id="column_select" class="form-select" required>
+                                <option value="">-- Bitte wählen --</option>
+                                {% for colName in header %}
+                                    <option value="{{ colName }}" {% if selectedColumnName == colName %}selected{% endif %}>{{ colName }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="value_input" class="form-label fw-bold">Filter-Wert</label>
+                            <input type="text" name="value" id="value_input" class="form-control" value="{{ filterValue }}" placeholder="z.B. aktiv, Kunde, Meier..." required>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" name="action" value="filter_data" class="btn btn-primary w-100" formnovalidate>Daten filtern</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card shadow-sm {% if not isFiltered %}disabled-card{% endif %}">
+                <h5 class="step-header">Schritt 3: Vorlagen und E-Mail-Details festlegen</h5>
+                <div class="card-body">
+                    <p>Laden Sie Ihre Word-Briefvorlage hoch und konfigurieren Sie die Details für den E-Mail-Versand.</p>
+                    <div class="row">
+                        <div class="col-md-6 mb-3" id="word_template_upload_container">
+                            <label for="word_template_upload" class="form-label fw-bold">Word-Briefvorlage (.docx)</label>
+                            <input class="form-control" type="file" name="word_template" id="word_template_upload" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                   title="Wählen Sie Ihre Word-Datei (.docx) als Vorlage für die Serienbriefe aus. Platzhalter in der Vorlage wie ${Name} werden durch Daten aus Ihrer Excel-Tabelle ersetzt."
+                                   data-bs-toggle="tooltip" data-bs-placement="top">
+                            {% if uploadError %}
+                                <div class="text-danger mt-1 small p-2 alert alert-danger">{{ uploadError }}</div>
+                            {% elif activeWordTemplate %}
+                                <div class="alert alert-info mt-2 p-2">Aktive Vorlage: <strong>{{ activeWordTemplate.split('/')[-1] }}</strong></div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="email_column_select" class="form-label fw-bold">Spalte mit E-Mail-Adressen</label>
+                            <select name="email_column" id="email_column_select" class="form-select"
+                                    title="Wählen Sie die Spalte in Ihrer Excel-Tabelle, die die E-Mail-Adressen der Empfänger enthält."
+                                    data-bs-toggle="tooltip" data-bs-placement="top">
+                                <option value="">-- Bitte wählen --</option>
+                                {% for colName in header %}
+                                    <option value="{{ colName }}" {% if emailColumn == colName %}selected{% endif %}>{{ colName }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="pdf_filename_format" class="form-label fw-bold">Dateiname für PDFs</label>
+                            <input type="text" name="pdf_filename_format" id="pdf_filename_format" class="form-control" value="{{ pdfFilenameFormat }}"
+                                   title="Definieren Sie das Namensformat für die generierten PDF-Dateien. Verwenden Sie Platzhalter wie ${Nummer} oder ${Name} entsprechend Ihrer Excel-Spalten."
+                                   data-bs-toggle="tooltip" data-bs-placement="top">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="email_subject" class="form-label fw-bold">E-Mail-Betreff</label>
+                            <input type="text" name="email_subject" id="email_subject" class="form-control" value="{{ emailSubject }}"
+                                   title="Geben Sie den Betreff der E-Mail ein. Platzhalter wie ${Anrede} oder ${Name} aus Ihrer Excel-Tabelle sind möglich."
+                                   data-bs-toggle="tooltip" data-bs-placement="top">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="from_name" class="form-label fw-bold">Absendername</label>
+                            <input type="text" name="from_name" id="from_name" class="form-control" value="{{ fromName }}" placeholder="z.B. Ihre Firma GmbH"
+                                   title="Geben Sie den Namen an, der als Absender der E-Mail angezeigt werden soll (z.B. 'Ihr Unternehmen GmbH')."
+                                   data-bs-toggle="tooltip" data-bs-placement="top">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email_body_textarea" class="form-label fw-bold">E-Mail-Text (Platzhalter werden ersetzt)</label>
+                        <textarea name="email_body" id="email_body_textarea" class="form-control" rows="8" placeholder="Sehr geehrte ${Anrede} ${Nachname}, ..."
+                                  title="Verfassen Sie den Text der E-Mail. Alle Spaltennamen aus Ihrer Excel-Tabelle können als Platzhalter (z.B. ${Anrede}, ${Straße}, ${PLZ}) verwendet werden."
+                                  data-bs-toggle="tooltip" data-bs-placement="bottom">{{ emailBody }}</textarea>
+                    </div>
+                    <div class="text-end">
+                        <button type="submit" name="action" value="confirm_templates" class="btn btn-primary">Details übernehmen</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card shadow-sm {% if not isReadyForStep3 %}disabled-card{% endif %}">
+                <h5 class="step-header">Schritt 3: PDFs zur Vorschau erzeugen</h5>
+                <div class="card-body">
+                    <p>Alle nötigen Informationen sind erfasst. Klicken Sie, um <strong>{{ filteredData | length }}</strong> personalisierte PDF-Dokumente zu erstellen und sie vor dem Versand zu prüfen.</p>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="submit" name="action" value="generate_for_review" class="btn btn-success" formnovalidate {% if not isReadyForStep3 %}disabled{% endif %}>PDFs zur Vorschau erzeugen</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+        {% if isFiltered and filteredData %}
+        <div class="card shadow-sm mt-4">
+            <div class="card-header">
+                <strong>Vorschau der gefilterten Daten ({{ filteredData | length }} Einträge gefunden)</strong>
+            </div>
+            <div class="table-responsive" style="max-height: 400px;">
+                <table class="table table-striped table-hover table-sm mb-0">
+                    <thead class="table-dark" style="position: sticky; top: 0;">
+                        <tr>{% for colName in header %}<th>{{ colName }}</th>{% endfor %}</tr>
+                    </thead>
+                    <tbody>
+                        {% for row in filteredData %}
+                            <tr>{% for colName in header %}<td>{{ row[colName] | default('') }}</td>{% endfor %}</tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% elif isFiltered and not filteredData %}
+            <div class="alert alert-warning">Für den Filterwert "<strong>{{ filterValue }}</strong>" in Spalte "<strong>{{ selectedColumnName }}</strong>" wurden keine Einträge gefunden.</div>
+        {% endif %}
+    {% endif %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Initialisierung der Tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+
+    // Funktion zum Entfernen aller Highlights
+    function removeAllHighlights() {
+        document.querySelectorAll('.highlight-next-input, .highlight-next-container').forEach(el => {
+            el.classList.remove('highlight-next-input', 'highlight-next-container');
+        });
+    }
+
+    // Funktion zum Hinzufügen eines Highlights
+    function addHighlight(elementId, isContainer = false) {
+        removeAllHighlights(); // Zuerst alle bestehenden entfernen
+        const element = document.getElementById(elementId);
+        if (element) {
+            // Für Container-Highlights: Füge die Klasse zum Container-Div hinzu
+            if (isContainer) {
+                element.classList.add('highlight-next-container');
+            } else { // Für direkte Input/Select-Felder: Füge die Klasse direkt zum Feld hinzu
+                element.classList.add('highlight-next-input');
+            }
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    // Bestimme den Initial-Highlight basierend auf Backend-Info
+    document.addEventListener('DOMContentLoaded', function() {
+        const initialHighlightFieldId = "{{ highlight_field_id }}";
+        if (initialHighlightFieldId) {
+            // Check if it's a container ID or a direct input ID
+            const isContainer = initialHighlightFieldId.includes('_container');
+            addHighlight(initialHighlightFieldId, isContainer);
+        }
+
+        // --- Client-seitige Logik für sequentielle Highlights ---
+        // (Diese Logik sollte die Highlight-Klasse direkt auf das Element setzen, nicht auf den Container,
+        // es sei denn, es ist der Excel-Upload oder Word-Vorlage-Container)
+
+        // Schritt 2: Empfänger auswählen und filtern
+        const columnSelect = document.getElementById('column_select');
+        const valueInput = document.getElementById('value_input');
+        const filterButton = document.querySelector('button[name="action"][value="filter_data"]');
+
+        if (columnSelect) {
+            columnSelect.addEventListener('change', function() {
+                if (this.value) { // Wenn eine Spalte ausgewählt wurde
+                    addHighlight('value_input', false); // Hervorhebe Filter-Wert (nicht Container)
+                } else {
+                    addHighlight('column_select', false); // Bleibe bei Filter-Spalte
+                }
+            });
+        }
+        if (valueInput) {
+            valueInput.addEventListener('input', function() {
+                if (this.value) { // Wenn ein Wert eingegeben wurde
+                    addHighlight(filterButton.id || filterButton.closest('div').id, false); // Hervorhebe den Filter-Button oder seinen Container
+                } else if (columnSelect.value) {
+                    addHighlight('value_input', false); // Bleibe bei Filter-Wert, wenn wieder leer
+                } else {
+                    addHighlight('column_select', false); // Springe zurück zu Spalte
+                }
+            });
+        }
+        // Ergänzung: Listener für den Filter-Button, um Highlight zu entfernen, wenn er geklickt wird
+        if (filterButton) {
+            filterButton.addEventListener('click', removeAllHighlights);
+        }
+        
+        // Schritt 3: Vorlagen und E-Mail-Details festlegen
+        const wordTemplateUpload = document.getElementById('word_template_upload');
+        const emailColumnSelect = document.getElementById('email_column_select');
+        const pdfFilenameFormat = document.getElementById('pdf_filename_format');
+        const emailSubject = document.getElementById('email_subject');
+        const fromName = document.getElementById('from_name');
+        const emailBodyTextarea = document.getElementById('email_body_textarea');
+        const confirmTemplatesButton = document.querySelector('button[name="action"][value="confirm_templates"]');
+
+
+        if (wordTemplateUpload) {
+            wordTemplateUpload.addEventListener('change', function() {
+                if (this.files.length > 0) { // Wenn eine Datei ausgewählt wurde
+                    addHighlight('email_column_select', false); // Markiere E-Mail-Spalte
+                } else {
+                    // Wenn keine Datei ausgewählt ist und es noch keine aktive Vorlage gibt (vor dem Upload)
+                    const activeTemplateExists = "{{ activeWordTemplate }}" ? true : false;
+                    if (!activeTemplateExists) {
+                        addHighlight('word_template_upload_container', true); // Bleibe bei Vorlagen-Container
+                    } else {
+                        removeAllHighlights(); // Wenn bereits eine Vorlage aktiv ist, keine Highlight mehr
+                    }
+                }
+            });
+        }
+
+        if (emailColumnSelect) {
+            emailColumnSelect.addEventListener('change', function() {
+                if (this.value) { // Wenn eine E-Mail-Spalte ausgewählt wurde
+                    // Prüfe, ob die nächsten optionalen Felder leer sind und springe zum ersten davon
+                    if (!pdfFilenameFormat.value) {
+                        addHighlight('pdf_filename_format', false);
+                    } else if (!emailSubject.value) {
+                        addHighlight('email_subject', false);
+                    } else if (!fromName.value) {
+                        addHighlight('from_name', false);
+                    } else if (!emailBodyTextarea.value || emailBodyTextarea.value === 'Sehr geehrte ${Anrede}, ') { // Standardwert berücksichtigen
+                        addHighlight('email_body_textarea', false);
+                    } else {
+                        // Wenn alle optionalen Felder ausgefüllt sind (oder ignoriert wurden), markiere den "Details übernehmen" Button
+                        addHighlight(confirmTemplatesButton.id || confirmTemplatesButton.closest('div').id, false);
+                    }
+                } else if (wordTemplateUpload.files.length > 0) {
+                     addHighlight('email_column_select', false); // Bleibe bei E-Mail-Spalte, wenn wieder leer
+                } else {
+                    addHighlight('word_template_upload_container', true); // Gehe zurück zur Vorlage
+                }
+            });
+        }
+
+        // Listener für optionale Felder in Schritt 3, um Kette fortzusetzen
+        const optionalFields = [pdfFilenameFormat, emailSubject, fromName, emailBodyTextarea];
+        optionalFields.forEach((field, index) => {
+            if (field) {
+                field.addEventListener('input', function() {
+                    removeAllHighlights(); // Zuerst alle Highlights entfernen
+                    let nextFieldToHighlight = null;
+
+                    // Finde das nächste leere optionale Feld NACH dem aktuellen
+                    for (let i = index + 1; i < optionalFields.length; i++) {
+                        const currentOptionalField = optionalFields[i];
+                        if (currentOptionalField && !currentOptionalField.value || (currentOptionalField.id === 'email_body_textarea' && currentOptionalField.value === 'Sehr geehrte ${Anrede}, ')) {
+                            nextFieldToHighlight = currentOptionalField;
+                            break;
+                        }
+                    }
+
+                    if (nextFieldToHighlight) {
+                        addHighlight(nextFieldToHighlight.id, false);
+                    } else {
+                        // Wenn alle optionalen Felder bis zum Ende ausgefüllt sind, markiere den "Details übernehmen" Button
+                        addHighlight(confirmTemplatesButton.id || confirmTemplatesButton.closest('div').id, false);
+                    }
+                });
+            }
+        });
+
+        // Ergänzung: Listener für den Confirm-Templates-Button
+        if (confirmTemplatesButton) {
+            confirmTemplatesButton.addEventListener('click', removeAllHighlights);
+        }
+    });
+
+    const reviewForm = document.getElementById('review-form');
+    if (reviewForm) {
+        reviewForm.addEventListener('submit', function(e) {
+            const submitter = e.submitter;
+
+            if (submitter && submitter.name === 'action' && submitter.value === 'send_selected') {
+                this.querySelectorAll('input[type="hidden"][name="selected_files[]"]').forEach(el => el.remove());
+                const checkboxes = document.querySelectorAll('input[type="checkbox"][name="selected_files[]"]:checked');
+                checkboxes.forEach(cb => {
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'selected_files[]';
+                    hiddenInput.value = cb.value;
+                    this.appendChild(hiddenInput);
+                });
+            } else if (submitter && submitter.name === 'action' && submitter.value === 'download_zip') {
+                this.querySelectorAll('input[type="hidden"][name="selected_files[]"]').forEach(el => el.remove());
+            }
+        });
+    }
+</script>
+</body>
+</html>

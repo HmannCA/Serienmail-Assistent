@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>2FA Verifizierung - Serienmail-Assistent</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background-color: #f8f9fa; }
+        .card { max-width: 400px; width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="card shadow-sm">
+        <div class="card-header text-center bg-primary text-white">
+            <h4>Zwei-Faktor-Authentifizierung</h4>
+        </div>
+        <div class="card-body p-4">
+            <p class="card-text">Ein 6-stelliger Verifizierungscode wurde an Ihre E-Mail-Adresse gesendet. Bitte geben Sie ihn hier ein, um den Login abzuschließen.</p>
+            {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+            {% endif %}
+            {% if successMessage %}
+                <div class="alert alert-success">{{ successMessage }}</div>
+            {% endif %}
+            <form method="post" action="/2fa-verify">
+                <div class="mb-3">
+                    <label for="code" class="form-label">Verifizierungscode</label>
+                    <input type="text" class="form-control" id="code" name="code" required maxlength="6" pattern="\d{6}" title="Bitte geben Sie den 6-stelligen Code ein, den Sie per E-Mail erhalten haben." autofocus> {# NEU: autofocus Attribut HINZUGEFÜGT #}
+                    <div class="form-text">Der Code ist 5 Minuten lang gültig.</div>
+                </div>
+                <div class="d-grid mb-3">
+                    <button type="submit" class="btn btn-primary">Verifizieren</button>
+                </div>
+                <div class="text-center">
+                    <a href="/logout" class="btn btn-link">Abbrechen und zum Login zurück</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
