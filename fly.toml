@@ -1,7 +1,4 @@
-# fly.toml app configuration file generated for serienbriefassistent on 2025-06-13T23:34:41+02:00
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
+# fly.toml app configuration file...
 
 app = 'serienbriefassistent'
 primary_region = 'ams'
@@ -9,7 +6,7 @@ primary_region = 'ams'
 [build]
 
 [http_service]
-  internal_port = 8000
+  internal_port = 8000      # <-- Fly klopft an dieser Tür an
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
@@ -22,4 +19,5 @@ primary_region = 'ams'
   cpus = 1
 
 [processes]
-  app = "gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8080"
+  # Passen Sie den Port HIER an, damit er zur Tür passt
+  app = "gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8000"
