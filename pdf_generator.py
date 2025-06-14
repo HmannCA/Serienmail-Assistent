@@ -8,12 +8,16 @@ import shutil
 
 from helpers import replace_docx_placeholders_in_text
 
-# --- Globale Konfiguration für LibreOffice ---
-# WICHTIG: Passe DIESEN Pfad an deinen LibreOffice-Installationspfad an!
-LIBREOFFICE_PATH = r"F:\LibreOffice\program\soffice.exe" # Dein Pfad!
-
+# --- Globale Konfiguration für Verzeichnisse ---
 DOCX_TEMP_DIR = "temp_docx_processed"
 PDF_GENERATED_DIR = "generated_pdfs"
+
+# ========= ANPASSUNG STARTET HIER =========
+# Der feste Windows-Pfad wird durch eine flexible Logik ersetzt.
+# Er liest den Pfad aus einer Umgebungsvariable (für Windows)
+# oder nimmt den Standard-Linux-Pfad (für die Cloud).
+LIBREOFFICE_PATH = os.environ.get("LIBREOFFICE_PATH", "/usr/bin/libreoffice")
+# ========= ANPASSUNG ENDE =========
 
 
 # NEUE FUNKTION: Manipuliert die XML-Datei eines DOCX-Dokuments
@@ -77,7 +81,7 @@ def generate_personalized_pdf(
     pdf_path = os.path.join(PDF_GENERATED_DIR, output_pdf_filename)
     
     libreoffice_command = [
-        LIBREOFFICE_PATH,
+        LIBREOFFICE_PATH, # Verwendet jetzt die flexible Variable
         "--headless",
         "--convert-to", "pdf",
         "--outdir", PDF_GENERATED_DIR,
@@ -85,10 +89,14 @@ def generate_personalized_pdf(
     ]
     
     try:
+        # HINWEIS: Hier wird jetzt der try-Block um den subprocess.run herumgebaut,
+        # um den FileNotFoundError spezifisch abzufangen, wie in Ihrem Originalcode.
         result = subprocess.run(libreoffice_command, capture_output=True, text=True, timeout=120)
         
         if result.returncode != 0:
-            raise Exception(f"LibreOffice Konvertierungsfehler ({result.returncode}): {result.stderr}")
+            # Hier geben wir eine detailliertere Fehlermeldung aus
+            error_details = result.stderr or result.stdout
+            raise Exception(f"LibreOffice Konvertierungsfehler ({result.returncode}): {error_details}")
         
         generated_pdf_filename_by_lo = os.path.basename(temp_output_docx_path).replace('.docx', '.pdf')
         actual_pdf_path_from_lo = os.path.join(PDF_GENERATED_DIR, generated_pdf_filename_by_lo)
@@ -109,8 +117,9 @@ def generate_personalized_pdf(
     except subprocess.TimeoutExpired:
         raise Exception("LibreOffice Konvertierung hat zu lange gedauert und wurde abgebrochen (Timeout).")
     except FileNotFoundError:
-        raise Exception(f"LibreOffice-Programm nicht gefunden unter '{LIBREOFFICE_PATH}'. "
-                        "Bitte überprüfen Sie den Pfad in pdf_generator.py und stellen Sie sicher, dass LibreOffice installiert ist.")
+        # Diese Fehlermeldung ist jetzt generischer und nicht mehr Windows-spezifisch.
+        raise Exception(f"LibreOffice-Programm nicht gefunden unter dem Pfad '{LIBREOFFICE_PATH}'. "
+                        "Bitte überprüfen Sie die Konfiguration (lokal in .env, in der Cloud im Code).")
     except Exception as e:
         raise Exception(f"Fehler bei LibreOffice-Aufruf: {e}")
     finally:
