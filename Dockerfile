@@ -8,8 +8,12 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-# Installiere System-Abhängigkeiten (falls später benötigt, schadet nicht)
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
+# HIER IST DIE ÄNDERUNG:
+# Installiert System-Abhängigkeiten. Wir fügen libreoffice-headless hinzu.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libreoffice-headless \
+    && rm -rf /var/lib/apt/lists/*
 
 # Kopiere die requirements.txt-Datei ZUERST in den Container
 COPY requirements.txt .
@@ -23,5 +27,5 @@ COPY . .
 # Der Port, auf dem die App laufen wird (nur zur Information für Docker)
 EXPOSE 8000
 
-# Der Befehl zum Starten der App (wird durch die fly.toml überschrieben, aber gut als Standard)
+# Der Befehl zum Starten der App (wird durch die fly.toml überschrieben, ist aber ein guter Standard)
 CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
