@@ -8,11 +8,11 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-# HIER IST DIE ÄNDERUNG:
-# Installiert System-Abhängigkeiten. Wir fügen libreoffice-headless hinzu.
+# HIER IST DIE KORREKTUR:
+# Der korrekte Paketname für eine Headless-Installation ist libreoffice-nogui
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    libreoffice-headless \
+    libreoffice-nogui \
     && rm -rf /var/lib/apt/lists/*
 
 # Kopiere die requirements.txt-Datei ZUERST in den Container
