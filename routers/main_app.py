@@ -32,16 +32,6 @@ def get_db():
     finally:
         db.close()
 
-_templates_instance_main_app: Optional[Jinja2Templates] = None
-
-def set_global_templates_instance(instance: Jinja2Templates):
-    global _templates_instance_main_app
-    _templates_instance_main_app = instance
-
-def get_templates_instance_for_main_app() -> Jinja2Templates:
-    if _templates_instance_main_app is None:
-        raise RuntimeError("Templates instance not initialized. Call set_global_templates_instance in main.py startup.")
-    return _templates_instance_main_app
 
 UPLOAD_DIR = "user_uploads"
 
@@ -75,7 +65,7 @@ async def reset_process(request: Request, current_user_id: int = Depends(get_cur
     return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
 
 @router.get("/", response_class=HTMLResponse)
-async def read_root(request: Request, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user_id), templates: Jinja2Templates = Depends(get_templates_instance_for_main_app)):
+async def read_root(request: Request, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user_id)):
     session_data = request.session
 
     excel_file_path = session_data.get('excel_file_path')

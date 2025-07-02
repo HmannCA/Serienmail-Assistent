@@ -23,10 +23,10 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 templates = Jinja2Templates(directory="templates")
 
-auth_router_module.set_global_templates_instance(templates)
-auth_router_module.set_global_pwd_context_instance(pwd_context)
-main_app_router_module.set_global_templates_instance(templates)
-settings_router_module.set_global_templates_instance(templates)
+# auth_router_module.set_global_templates_instance(templates)
+# auth_router_module.set_global_pwd_context_instance(pwd_context)
+# main_app_router_module.set_global_templates_instance(templates)
+# settings_router_module.set_global_templates_instance(templates)
 
 PDF_GENERATED_DIR = "generated_pdfs"
 UPLOAD_DIR = "user_uploads"

@@ -41,13 +41,21 @@ async def post_login(request: Request, email: str = Form(...), password: str = F
         request.session["errorMessage"] = "Konto inaktiv oder nicht verifiziert."
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     
-    two_fa_code = ''.join(secrets.choice('0123456789') for i in range(6))
-    expires_at = datetime.utcnow() + timedelta(minutes=10)
-    db.add(EmailVerificationToken(user_id=user.id, token=two_fa_code, expires_at=expires_at))
-    db.commit()
-    await send_2fa_email(user.email, two_fa_code, user.username)
-    request.session["user_id_pending_2fa"] = user.id
-    return RedirectResponse(url="/2fa-verify", status_code=status.HTTP_302_FOUND)
+
+    # 2FA TEMPORÄR DEAKTIVIERT
+    request.session.clear()
+    request.session["user_id"] = user.id
+    request.session["username"] = user.username
+    request.session["smtp_test_status"] = "not_set"  # Temporär
+    return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+
+    # two_fa_code = ''.join(secrets.choice('0123456789') for i in range(6))
+    # expires_at = datetime.utcnow() + timedelta(minutes=10)
+    # db.add(EmailVerificationToken(user_id=user.id, token=two_fa_code, expires_at=expires_at))
+    # db.commit()
+    # await send_2fa_email(user.email, two_fa_code, user.username)
+    # request.session["user_id_pending_2fa"] = user.id
+    # return RedirectResponse(url="/2fa-verify", status_code=status.HTTP_302_FOUND)
 
 @router.get("/2fa-verify", response_class=HTMLResponse)
 async def get_2fa_verify_form(request: Request):
@@ -73,6 +81,13 @@ async def post_2fa_verify(request: Request, code: str = Form(...), db: Session =
         request.session["smtp_test_status"] = test_result["status"]
     db.delete(token_entry); db.commit()
     return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+
+# GET-Route für Registrierungsformular 
+@router.get("/register", response_class=HTMLResponse)
+async def get_register_form(request: Request):
+    error = request.session.pop("errorMessage", None)
+    success = request.session.pop("successMessage", None)
+    return templates.TemplateResponse("register.html", {"request": request, "error": error, "successMessage": success})
 
 @router.post("/register", response_class=RedirectResponse)
 async def post_register(request: Request, username: str = Form(...), email: str = Form(...), password: str = Form(...), confirm_password: str = Form(...), db: Session = Depends(get_db)):
