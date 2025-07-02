@@ -60,9 +60,6 @@ async def send_personalized_emails(
                 msg['Subject'] = file_info['subject']
 
                 html_email_body_template = file_info['body'] 
-                
-                # Hier lag der vermutete Tippfehler "dat-row" wenn er überhaupt im Code war,
-                # aber die Variable in file_info ist 'data_row'. Ich stelle sicher, dass sie korrekt verwendet wird.
                 html_body_processed = replace_html_placeholders_in_text(html_email_body_template, file_info['data_row'])
 
                 plain_body_processed = re.sub(r'<[^>]+>', '', html_body_processed).strip()
@@ -73,14 +70,17 @@ async def send_personalized_emails(
                 part2 = MIMEText(html_body_processed, 'html')
                 msg.attach(part1)
                 msg.attach(part2)
-
-                if os.path.exists(file_info['pdf_path']):
-                    with open(file_info['pdf_path'], "rb") as f:
+                
+                # GEÄNDERT: Anhang wird nur hinzugefügt, wenn ein PDF-Pfad vorhanden ist.
+                pdf_path = file_info.get('pdf_path')
+                if pdf_path and os.path.exists(pdf_path):
+                    with open(pdf_path, "rb") as f:
                         attach = MIMEApplication(f.read(), _subtype="pdf")
-                        attach.add_header('Content-Disposition', 'attachment', filename=os.path.basename(file_info['pdf_path']))
+                        attach.add_header('Content-Disposition', 'attachment', filename=os.path.basename(pdf_path))
                         msg.attach(attach)
-                else:
-                    process_log.append({'status': 'error', 'message': f"Fehler: PDF für {file_info['recipient_email']} nicht gefunden: {os.path.basename(file_info['pdf_path'])}."})
+                elif pdf_path and not os.path.exists(pdf_path):
+                    # Wenn ein Anhang erwartet wurde, aber nicht gefunden wird -> Fehler
+                    process_log.append({'status': 'error', 'message': f"Fehler: PDF für {file_info['recipient_email']} nicht gefunden: {os.path.basename(pdf_path)}."})
                     continue
 
                 server.send_message(msg)
@@ -96,9 +96,11 @@ async def send_personalized_emails(
             report_html = "<h1>Sendebestätigung</h1><p>Der Serienmail-Assistent hat am " + \
                       datetime.now().strftime(r'%d.%m.%Y \u\m %H:%M') + " Uhr E-Mails versendet:</p>"
             report_html += "<table border='1' cellpadding='5' cellspacing='0' style='border-collapse: collapse; width: 100%;'>"
-            report_html += "<tr><th style='background-color:#eee;'>Empfänger</th><th style='background-color:#eee;'>E-Mail</th><th style='background-color:#eee;'>Gesendetes Dokument</th></tr>"
+            # GEÄNDERT: Spalte für Dokument anpassen, um "Kein Anhang" zu zeigen
+            report_html += "<tr><th style='background-color:#eee;'>Empfänger</th><th style='background-color:#eee;'>E-Mail</th><th style='background-color:#eee;'>Dokument</th></tr>"
             for report_item in sent_items_for_report:
-                report_html += f"<tr><td>{report_item['recipient_name']}</td><td>{report_item['recipient_email']}</td><td>{os.path.basename(report_item['pdf_path'])}</td></tr>"
+                document_name = os.path.basename(report_item['pdf_path']) if report_item.get('pdf_path') else "Kein Anhang"
+                report_html += f"<tr><td>{report_item['recipient_name']}</td><td>{report_item['recipient_email']}</td><td>{document_name}</td></tr>"
             report_html += "</table>"
 
             report_msg = MIMEMultipart('alternative')

@@ -1,5 +1,37 @@
+# Deployment / Cloud
 fly.toml
-.git/
+
+# Git
+.git
+.gitignore
+.github
+
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment & Secrets
+.env
+*.env
 .envrc
+venv/
 .venv/
+env/
+.env/
+
+# IDE files
+.vscode/
+.idea/
+
+# Betriebssystem-Dateien
+.DS_Store
+Thumbs.db
+
+# Anwendungsdaten, die nicht in den Container gehören
+user_uploads/
+generated_pdfs/
+temp_docx_processed/
+app.db
+app.db-journal

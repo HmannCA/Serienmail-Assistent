@@ -1,6 +1,6 @@
 import os
 from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, UniqueConstraint, DateTime, Boolean, DECIMAL
-from sqlalchemy.orm import sessionmaker, declarative_base, relationship # relationship HINZUGEFÜGT
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta 
 from dotenv import load_dotenv
@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Pfad zur SQLite-Datenbankdatei
-DATABASE_URL = "sqlite:///./app.db" # Standardmäßig im selben Verzeichnis wie die Anwendung
+DATABASE_URL = "sqlite:///./app.db"
 
 # SQLAlchemy Basis für Deklaration von Modellen
 Base = declarative_base()
@@ -25,11 +25,11 @@ class User(Base):
     is_verified = Column(Boolean, default=False) 
     registration_date = Column(DateTime, default=datetime.utcnow) 
 
-    # Beziehungen zu den neuen Tabellen
+    # Beziehungen zu den neuen Tabellen - mit String-Referenzen für Forward Declaration
     smtp_settings = relationship("SmtpSettings", backref="user", uselist=False, cascade="all, delete-orphan")
     password_reset_tokens = relationship("PasswordResetToken", backref="user", cascade="all, delete-orphan")
     email_verification_tokens = relationship("EmailVerificationToken", backref="user", cascade="all, delete-orphan")
-    process_log_entries = relationship("ProcessLogEntry", backref="user", cascade="all, delete-orphan") # NEU: Beziehung zu ProcessLogEntry
+    process_log_entries = relationship("ProcessLogEntry", backref="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
@@ -38,7 +38,7 @@ class User(Base):
 class SmtpSettings(Base):
     __tablename__ = 'smtp_settings'
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), unique=True, nullable=False) # Jeder User nur 1 Einstellungsset
+    user_id = Column(Integer, ForeignKey('users.id'), unique=True, nullable=False)
     encrypted_host = Column(Text, nullable=False)
     encrypted_user = Column(Text, nullable=False)
     encrypted_pass = Column(Text, nullable=False)
@@ -61,7 +61,7 @@ class PasswordResetToken(Base):
     def __repr__(self):
         return f"<PasswordResetToken(id={self.id}, user_id={self.user_id}, expires_at='{self.expires_at}')>"
 
-# Definition der EmailVerificationTokens-Tabelle (für E-Mail-Verifizierung/2FA)
+# Definition der EmailVerificationTokens-Tabelle
 class EmailVerificationToken(Base):
     __tablename__ = 'email_verification_tokens'
     id = Column(Integer, primary_key=True, index=True)
@@ -72,7 +72,7 @@ class EmailVerificationToken(Base):
     def __repr__(self):
         return f"<EmailVerificationToken(id={self.id}, user_id={self.user_id}, expires_at='{self.expires_at}')>"
 
-# NEU: Definition der ProcessLogEntry-Tabelle für die Historie der Serienmail-Vorgänge
+# Definition der ProcessLogEntry-Tabelle für die Historie der Serienmail-Vorgänge
 class ProcessLogEntry(Base):
     __tablename__ = 'process_log_entries'
     id = Column(Integer, primary_key=True, index=True)
@@ -95,7 +95,7 @@ class ProcessLogEntry(Base):
     def __repr__(self):
         return f"<ProcessLogEntry(id={self.id}, user_id={self.user_id}, timestamp='{self.timestamp}', status='{self.status}')>"
 
-# NEU: Definition der GeneratedFile-Tabelle für Details zu jeder generierten Datei
+# Definition der GeneratedFile-Tabelle für Details zu jeder generierten Datei
 class GeneratedFile(Base):
     __tablename__ = 'generated_files'
     id = Column(Integer, primary_key=True, index=True)
@@ -103,7 +103,7 @@ class GeneratedFile(Base):
     recipient_email = Column(String, nullable=False)
     recipient_name = Column(String, nullable=False)
     pdf_filename = Column(String, nullable=False)
-    pdf_storage_path = Column(String, nullable=False) # Pfad zur tatsächlich gespeicherten PDF
+    pdf_storage_path = Column(String, nullable=False)
     email_sent_status = Column(String, nullable=False) # 'success', 'failed'
     email_sent_message = Column(Text, nullable=True)
     sent_timestamp = Column(DateTime, nullable=True)
@@ -113,7 +113,7 @@ class GeneratedFile(Base):
 
 
 # Datenbank-Engine und Session-Erstellung
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}) # check_same_thread=False für SQLite in FastAPI
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -123,15 +123,13 @@ def create_db_and_tables():
 
 # Beispiel-Anwendung (nur zum Testen oder für Initialisierung)
 if __name__ == "__main__":
-    from security import encrypt_data # Brauchen wir hier zum Hashing und Verschlüsseln
-    from passlib.context import CryptContext # Für Passwort-Hashing
+    from security import encrypt_data
+    from passlib.context import CryptContext
 
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     # WICHTIG: Wenn Sie die DB-Struktur geändert haben und bestehende Daten löschen möchten,
     # können Sie die app.db-Datei manuell löschen, BEVOR Sie create_db_and_tables() aufrufen.
-    # Ansonsten wird SQLAlchemy versuchen, die neuen Tabellen hinzuzufügen, was bei bestehenden Daten
-    # ohne Migration Tools (wie Alembic) zu Fehlern führen kann.
     if os.path.exists("./app.db"):
         print("Bestehende app.db gefunden. Für eine saubere Neuinitialisierung mit neuen Tabellen bitte manuell löschen.")
         # os.remove("./app.db") # Uncomment diese Zeile, um die DB zu löschen!

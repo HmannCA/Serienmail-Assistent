@@ -5,7 +5,9 @@ from lxml import etree
 from io import BytesIO
 import re
 import shutil
+from dotenv import load_dotenv
 
+load_dotenv()
 from helpers import replace_docx_placeholders_in_text
 
 # --- Globale Konfiguration für Verzeichnisse ---

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDFs werden erzeugt...</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .status-card { min-width: 70vw; max-width: 800px; }
+        #progress-log { background-color: #212529; color: #e9ecef; font-family: monospace; padding: 1rem; border-radius: 0.5rem; width: 100%; height: 50vh; overflow-y: auto; font-size: 0.9em; border: 1px solid #495057; }
+        #progress-log p { margin-bottom: 0.5rem; white-space: pre-wrap; word-break: break-all; }
+        #progress-log .text-success { color: #28a745 !important; }
+        #progress-log .text-danger { color: #dc3545 !important; }
+        #progress-log .text-info { color: #0dcaf0 !important; }
+    </style>
+</head>
+<body>
+    <div class="card shadow-sm status-card">
+        <h5 class="card-header">PDF-Generierung läuft...</h5>
+        <div class="card-body">
+            <p>Bitte schließen Sie dieses Fenster nicht. Die PDF-Dokumente werden im Hintergrund erstellt.</p>
+            <div class="progress mb-3" style="height: 25px;">
+                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            </div>
+            <div id="progress-log"><p>Initialisiere Prozess...</p></div>
+        </div>
+        <div class="card-footer text-end" id="footer-buttons" style="display: none;">
+             <a href="/" class="btn btn-success">Ergebnisse anzeigen</a>
+        </div>
+    </div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const jobId = {{ job_id }};
+        const progressBar = document.getElementById('progress-bar');
+        const logContainer = document.getElementById('progress-log');
+        const footerButtons = document.getElementById('footer-buttons');
+
+        function pollStatus() {
+            fetch(`/api/generation-status/${jobId}`)
+                .then(response => response.ok ? response.json() : Promise.reject('Netzwerk-Antwort war nicht OK'))
+                .then(data => {
+                    const percentage = data.total_docs > 0 ? (data.processed_docs / data.total_docs) * 100 : 0;
+                    progressBar.style.width = percentage + '%';
+                    progressBar.textContent = Math.round(percentage) + '%';
+                    
+                    if(data.last_message && logContainer.lastChild.textContent !== data.last_message) {
+                         const logLine = document.createElement('p');
+                         logLine.textContent = data.last_message;
+                         logLine.className = data.last_message.startsWith("FEHLER") ? 'text-danger' : 'text-success';
+                         logContainer.appendChild(logLine);
+                         logContainer.scrollTop = logContainer.scrollHeight;
+                    }
+
+                    if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+                        clearInterval(intervalId);
+                        progressBar.classList.remove('progress-bar-animated');
+                        progressBar.classList.add(data.status === 'COMPLETED' ? 'bg-success' : 'bg-danger');
+                        const finalLine = document.createElement('p');
+                        finalLine.textContent = `Prozess beendet mit Status: ${data.status}`;
+                        finalLine.className = 'text-info fw-bold';
+                        logContainer.appendChild(finalLine);
+                        logContainer.scrollTop = logContainer.scrollHeight;
+                        footerButtons.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Fehler beim Abrufen des Job-Status:', error);
+                    clearInterval(intervalId);
+                });
+        }
+        const intervalId = setInterval(pollStatus, 2500);
+    });
+</script>
+</body>
+</html>

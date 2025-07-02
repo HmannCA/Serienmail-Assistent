@@ -5,8 +5,13 @@ import html
 
 # --- Hilfsfunktion, um Werte JSON-serialisierbar zu machen (insbesondere Datums-/Zeitwerte) ---
 def clean_for_json(value):
+    # GEÄNDERT: Datums-Objekte werden jetzt in ein lesbares deutsches Format umgewandelt.
     if isinstance(value, datetime):
-        return value.isoformat()
+        # Wenn die Zeit Mitternacht ist, nur das Datum anzeigen. Ansonsten auch die Zeit.
+        if value.hour == 0 and value.minute == 0 and value.second == 0:
+            return value.strftime('%d.%m.%Y')
+        else:
+            return value.strftime('%d.%m.%Y %H:%M:%S')
     return value
 
 # --- Hilfsfunktion, um Platzhalter in DOCX-Text zu ersetzen ---
